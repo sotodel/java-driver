@@ -32,25 +32,28 @@ public class Select extends BuiltStatement {
 
     private final String table;
     private final boolean isDistinct;
+    private final boolean isJson;
     private final List<Object> columnNames;
     private final Where where;
     private List<Ordering> orderings;
     private Object limit;
     private boolean allowFiltering;
 
-    Select(String keyspace, String table, List<Object> columnNames, boolean isDistinct) {
+    Select(String keyspace, String table, List<Object> columnNames, boolean isDistinct, boolean isJson) {
         super(keyspace);
         this.table = table;
-        this.isDistinct = isDistinct;
         this.columnNames = columnNames;
+        this.isDistinct = isDistinct;
+        this.isJson = isJson;
         this.where = new Where(this);
     }
 
-    Select(TableMetadata table, List<Object> columnNames, boolean isDistinct) {
+    Select(TableMetadata table, List<Object> columnNames, boolean isDistinct, boolean isJson) {
         super(table);
         this.table = escapeId(table.getName());
-        this.isDistinct = isDistinct;
         this.columnNames = columnNames;
+        this.isDistinct = isDistinct;
+        this.isJson = isJson;
         this.where = new Where(this);
     }
 
@@ -59,8 +62,13 @@ public class Select extends BuiltStatement {
         StringBuilder builder = new StringBuilder();
 
         builder.append("SELECT ");
+
+        if (isJson)
+            builder.append("JSON ");
+
         if (isDistinct)
             builder.append("DISTINCT ");
+
         if (columnNames == null) {
             builder.append('*');
         } else {
@@ -251,6 +259,7 @@ public class Select extends BuiltStatement {
 
         List<Object> columnNames;
         boolean isDistinct;
+        boolean isJson;
 
         Builder() {
         }
@@ -266,6 +275,22 @@ public class Select extends BuiltStatement {
          */
         public Builder distinct() {
             this.isDistinct = true;
+            return this;
+        }
+
+        /**
+         * Uses JSON selection.
+         * <p>
+         * Cassandra 2.2 introduced JSON support to SELECT statements:
+         * the {@code JSON} keyword can be used to return each row as a single JSON encoded map.
+         *
+         * @return this in-build SELECT statement.
+         * @see <a href="http://cassandra.apache.org/doc/cql3/CQL-2.2.html#json">JSON Support for CQL</a>
+         * @see <a href="http://www.datastax.com/dev/blog/whats-new-in-cassandra-2-2-json-support">JSON Support in Cassandra 2.2</a>
+         * @see <a href="https://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryJSON.html">Data retrieval using JSON</a>
+         */
+        public Builder json() {
+            this.isJson = true;
             return this;
         }
 
@@ -287,7 +312,7 @@ public class Select extends BuiltStatement {
          * @return a newly built SELECT statement that selects from {@code keyspace.table}.
          */
         public Select from(String keyspace, String table) {
-            return new Select(keyspace, table, columnNames, isDistinct);
+            return new Select(keyspace, table, columnNames, isDistinct, isJson);
         }
 
         /**
@@ -297,7 +322,7 @@ public class Select extends BuiltStatement {
          * @return a newly built SELECT statement that selects from {@code table}.
          */
         public Select from(TableMetadata table) {
-            return new Select(table, columnNames, isDistinct);
+            return new Select(table, columnNames, isDistinct, isJson);
         }
     }
 
@@ -314,6 +339,23 @@ public class Select extends BuiltStatement {
         @Override
         public Selection distinct() {
             this.isDistinct = true;
+            return this;
+        }
+
+        /**
+         * Uses JSON selection.
+         * <p>
+         * Cassandra 2.2 introduced JSON support to SELECT statements:
+         * the {@code JSON} keyword can be used to return each row as a single JSON encoded map.
+         *
+         * @return this in-build SELECT statement.
+         * @see <a href="http://cassandra.apache.org/doc/cql3/CQL-2.2.html#json">JSON Support for CQL</a>
+         * @see <a href="http://www.datastax.com/dev/blog/whats-new-in-cassandra-2-2-json-support">JSON Support in Cassandra 2.2</a>
+         * @see <a href="https://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryJSON.html">Data retrieval using JSON</a>
+         */
+        @Override
+        public Selection json() {
+            this.isJson = true;
             return this;
         }
 

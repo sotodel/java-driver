@@ -933,4 +933,20 @@ public class QueryBuilderTest {
         assertThat(query.hasValues()).isFalse();
     }
 
+    @Test(groups = "unit")
+    public void should_handle_select_json() throws Exception {
+        assertThat(
+                select().json().from("users").toString())
+                .isEqualTo("SELECT JSON * FROM users;");
+        assertThat(
+                select("id", "age").json().from("users").toString())
+                .isEqualTo("SELECT JSON id,age FROM users;");
+        assertThat(
+                select().json().column("id").writeTime("age").ttl("state").as("ttl").from("users").toString())
+                .isEqualTo("SELECT JSON id,writetime(age),ttl(state) AS ttl FROM users;");
+        assertThat(
+                select().distinct().json().column("id").from("users").toString())
+                .isEqualTo("SELECT JSON DISTINCT id FROM users;"); // note that the correct syntax is JSON DISTINCT
+    }
+
 }
