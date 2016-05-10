@@ -419,6 +419,27 @@ public class Select extends BuiltStatement {
          * @return this in-build SELECT statement
          */
         public abstract SelectionOrAlias fcall(String name, Object... parameters);
+
+        /**
+         * Creates a {@code toJson()} function call.
+         * This is a shortcut for {@code fcall("toJson", QueryBuilder.column(name))}.
+         * <p>
+         * Support for JSON functions has been added in Cassandra 2.2.
+         * The {@code toJson()} function is similar to {@code SELECT JSON} statements,
+         * but applies to a single column value instead of the entire row,
+         * and produces a JSON-encoded string representing the normal Cassandra column value.
+         * <p>
+         * It may only be used in the selection clause of a {@code SELECT} statement.
+         *
+         * @return the function call.
+         * @see <a href="http://cassandra.apache.org/doc/cql3/CQL-2.2.html#json">JSON Support for CQL</a>
+         * @see <a href="http://www.datastax.com/dev/blog/whats-new-in-cassandra-2-2-json-support">JSON Support in Cassandra 2.2</a>
+         */
+        public SelectionOrAlias toJson(String name) {
+            // This method should be abstract like others here. But adding an abstract method is not binary-compatible,
+            // so we add this dummy implementation to make Clirr happy.
+            throw new UnsupportedOperationException("Not implemented. This should only happen if you've written your own implementation of Selection");
+        }
     }
 
     /**
@@ -560,6 +581,13 @@ public class Select extends BuiltStatement {
         @Override
         public SelectionOrAlias fcall(String name, Object... parameters) {
             return queueName(new Utils.FCall(name, parameters));
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        public SelectionOrAlias toJson(String name) {
+            return queueName(new Utils.FCall("toJson", new Utils.CName(name)));
         }
 
         /**
