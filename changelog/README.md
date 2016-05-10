@@ -1,5 +1,10 @@
 ## Changelog
 
+### 3.1.0 (in progress)
+
+- [sub-task] JAVA-743: QueryBuilder support for JSON.
+
+
 ### 3.0.0
 
 - [bug] JAVA-1034: fix metadata parser for collections of custom types.
