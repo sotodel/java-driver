@@ -19,7 +19,9 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.util.Collection;
+import java.util.Set;
 
+import static com.datastax.driver.core.Assertions.assertThat;
 import static com.datastax.driver.core.CreateCCM.TestMode.PER_METHOD;
 import static com.datastax.driver.core.TestUtils.CREATE_KEYSPACE_SIMPLE_FORMAT;
 import static com.google.common.collect.Lists.newArrayList;
@@ -73,9 +75,14 @@ public class NodeListRefreshDebouncerTest extends CCMTestsSupport {
      */
     @Test(groups = "short")
     public void should_debounce_refresh_when_keyspace_created() {
-        String keyspace = "sdrwkc";
+        String keyspace = TestUtils.generateIdentifier("ks_");
         session().execute(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, keyspace, 1));
         keyspaces.add(keyspace);
+
+        // check that the metadata is immediately up-to-date for the client that issued the DDL statement
+        Metadata metadata = cluster().getMetadata();
+        Set<Host> replicas = metadata.getReplicas(keyspace, metadata.getTokenRanges().iterator().next());
+        assertThat(replicas).hasSize(1);
 
         verify(controlConnection, timeout(DEBOUNCE_TIME + queryOptions.getRefreshSchemaIntervalMillis())).refreshNodeListAndTokenMap();
     }
@@ -92,14 +99,14 @@ public class NodeListRefreshDebouncerTest extends CCMTestsSupport {
     public void should_refresh_when_max_pending_requests_reached() {
         // Create keyspaces 5 times to cause
         // refreshNodeListAndTokenMap to be called.
-        String prefix = "srwmprr";
         for (int i = 0; i < 5; i++) {
-            String keyspace = prefix + i;
-            session().execute(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, keyspace, 1));
+            String keyspace = TestUtils.generateIdentifier("ks_");
+            // use executeAsync to send all 5 requests without waiting for metadata update each time
+            session().executeAsync(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, keyspace, 1));
             keyspaces.add(keyspace);
         }
 
-        // add a 1 second delay to account for executor submit.
-        verify(controlConnection, timeout(1000)).refreshNodeListAndTokenMap();
+        // add delay to account for executor submit.
+        verify(controlConnection, timeout(DEBOUNCE_TIME)).refreshNodeListAndTokenMap();
     }
 }

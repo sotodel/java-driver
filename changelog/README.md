@@ -2,6 +2,8 @@
 
 ### 3.0.2 (in progress)
 
+- [bug] JAVA-1193: Replica metadata should be refreshed immediately when a DDL statement is executed.
+
 Merged from 2.1 branch:
 
 - [bug] JAVA-1179: Request objects should be copied when executed.

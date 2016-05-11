@@ -2226,15 +2226,15 @@ public class Cluster implements Closeable {
             return schemaRefreshRequestDebouncer.eventReceived(request);
         }
 
-        void submitNodeListRefresh() {
+        ListenableFuture<Void> submitNodeListRefresh() {
             logger.trace("Submitting node list and token map refresh");
-            nodeListRefreshRequestDebouncer.eventReceived(new NodeListRefreshRequest());
+            return nodeListRefreshRequestDebouncer.eventReceived(new NodeListRefreshRequest());
         }
 
-        void submitNodeRefresh(InetSocketAddress address, HostEvent eventType) {
+        ListenableFuture<Void> submitNodeRefresh(InetSocketAddress address, HostEvent eventType) {
             NodeRefreshRequest request = new NodeRefreshRequest(address, eventType);
             logger.trace("Submitting node refresh: {}", request);
-            nodeRefreshRequestDebouncer.eventReceived(request);
+            return nodeRefreshRequestDebouncer.eventReceived(request);
         }
 
         // refresh the schema using the provided connection, and notice the future with the provided resultset once done
@@ -2252,8 +2252,10 @@ public class Cluster implements Closeable {
         }
 
         private void maybeRefreshSchemaAndSignal(final Connection connection, final DefaultResultSetFuture future, final ResultSet rs, final SchemaElement targetType, final String targetKeyspace, final String targetName, final List<String> targetSignature) {
-            final boolean refreshSchema = (targetKeyspace != null); // if false, only wait for schema agreement
-
+            // if false, only wait for schema agreement
+            final boolean refreshSchema = (targetKeyspace != null);
+            // JAVA-1193: If we have an updated keyspace, rebuild the node list and token map too
+            final boolean refreshNodeList = targetType == KEYSPACE;
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
@@ -2265,7 +2267,20 @@ public class Cluster implements Closeable {
                         if (!schemaInAgreement)
                             logger.warn("No schema agreement from live replicas after {} s. The schema may not be up to date on some nodes.", configuration.getProtocolOptions().getMaxSchemaAgreementWaitSeconds());
 
-                        ListenableFuture<Void> schemaReady = refreshSchema ? submitSchemaRefresh(targetType, targetKeyspace, targetName, targetSignature) : MoreFutures.VOID_SUCCESS;
+                        ListenableFuture<Void> schemaReady;
+                        if (refreshSchema) {
+                            schemaReady = submitSchemaRefresh(targetType, targetKeyspace, targetName, targetSignature);
+                            if (refreshNodeList) {
+                                schemaReady = Futures.transform(schemaReady, new AsyncFunction<Object, Void>() {
+                                    @Override
+                                    public ListenableFuture<Void> apply(Object input) throws Exception {
+                                        return submitNodeListRefresh();
+                                    }
+                                });
+                            }
+                        } else {
+                            schemaReady = MoreFutures.VOID_SUCCESS;
+                        }
                         final boolean finalSchemaInAgreement = schemaInAgreement;
                         schemaReady.addListener(new Runnable() {
                             @Override
