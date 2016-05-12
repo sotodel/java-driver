@@ -2270,11 +2270,16 @@ public class Cluster implements Closeable {
                         ListenableFuture<Void> schemaReady;
                         if (refreshSchema) {
                             schemaReady = submitSchemaRefresh(targetType, targetKeyspace, targetName, targetSignature);
+                            // JAVA-1120: skip debouncing delay and force immediate delivery
+                            schemaRefreshRequestDebouncer.scheduleImmediateDelivery();
                             if (refreshNodeList) {
                                 schemaReady = Futures.transform(schemaReady, new AsyncFunction<Object, Void>() {
                                     @Override
                                     public ListenableFuture<Void> apply(Object input) throws Exception {
-                                        return submitNodeListRefresh();
+                                        ListenableFuture<Void> nodeListRefreshReady = submitNodeListRefresh();
+                                        // JAVA-1120: skip debouncing delay and force immediate delivery
+                                        nodeListRefreshRequestDebouncer.scheduleImmediateDelivery();
+                                        return nodeListRefreshReady;
                                     }
                                 });
                             }

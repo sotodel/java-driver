@@ -3,6 +3,7 @@
 ### 3.0.2 (in progress)
 
 - [bug] JAVA-1193: Replica metadata should be refreshed immediately when a DDL statement is executed.
+- [bug] JAVA-1120: Consider skipping schema refresh debouncer when checking for agreement as a result of schema change made by client.
 
 Merged from 2.1 branch:
 
