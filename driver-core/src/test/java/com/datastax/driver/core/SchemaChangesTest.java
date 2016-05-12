@@ -27,8 +27,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.datastax.driver.core.Assertions.assertThat;
+import static com.datastax.driver.core.ConditionChecker.check;
 import static com.datastax.driver.core.Metadata.handleId;
 import static com.datastax.driver.core.TestUtils.nonDebouncingQueryOptions;
+import static com.google.common.base.Predicates.equalTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.*;
 
@@ -44,7 +46,9 @@ public class SchemaChangesTest extends CCMTestsSupport {
     private static final String DROP_TABLE = "DROP TABLE %s.table1";
 
     /**
-     * The maximum time that the test will wait to check that listeners have been notified
+     * The maximum time that the test will wait to check that listeners have been notified.
+     * This threshold is intentionally set to a very high value to allow CI tests
+     * to pass.
      */
     private static final long NOTIF_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
 
@@ -150,7 +154,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .isInKeyspace(handleId(keyspace))
                     .hasName("table1");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getTable("table1")).isNotNull();
     }
@@ -166,7 +169,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .isInKeyspace(handleId(keyspace))
                     .hasName("table1");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getTable("table1")).hasNoColumn("j");
         assert added != null;
@@ -183,7 +185,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .hasName("table1")
                     .hasColumn("j");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getTable("table1")).hasColumn("j");
     }
@@ -198,14 +199,12 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .hasName("table1")
                     .isInKeyspace(handleId(keyspace));
         }
-        refreshSchema();
         execute(DROP_TABLE, keyspace);
         for (SchemaChangeListener listener : listeners) {
             ArgumentCaptor<TableMetadata> removed = ArgumentCaptor.forClass(TableMetadata.class);
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onTableRemoved(removed.capture());
             assertThat(removed.getValue()).hasName("table1");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getTable("table1")).isNull();
     }
@@ -221,7 +220,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             assertThat((DataType) added.getValue())
                     .isUserType(handleId(keyspace), "type1");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat((DataType) m.getKeyspace(keyspace).getUserType("type1")).isNotNull();
     }
@@ -238,7 +236,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             assertThat(previous.getValue().getFieldNames()).doesNotContain("j");
             assertThat(current.getValue().getFieldNames()).contains("j");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getUserType("type1").getFieldType("j")).isNotNull();
     }
@@ -254,7 +251,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onUserTypeRemoved(removed.capture());
             assertThat((DataType) removed.getValue()).isUserType(handleId(keyspace), "type1");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat((DataType) m.getKeyspace(keyspace).getUserType("type1")).isNull();
     }
@@ -263,7 +259,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
     @CassandraVersion(major = 2.2)
     public void should_notify_of_function_creation(String keyspace) {
         session1.execute(String.format("CREATE FUNCTION %s.\"ID\"(i int) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java AS 'return i;'", keyspace));
-
         for (SchemaChangeListener listener : listeners) {
             ArgumentCaptor<FunctionMetadata> added = ArgumentCaptor.forClass(FunctionMetadata.class);
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onFunctionAdded(added.capture());
@@ -271,7 +266,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .isInKeyspace(handleId(keyspace))
                     .hasSignature("\"ID\"(int)");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getFunction("\"ID\"", DataType.cint()))
                     .isNotNull();
@@ -280,47 +274,44 @@ public class SchemaChangesTest extends CCMTestsSupport {
     @Test(groups = "short", dataProvider = "existingKeyspaceName")
     @CassandraVersion(major = 2.2)
     public void should_notify_of_function_update(String keyspace) {
-        session1.execute(String.format("CREATE TYPE IF NOT EXISTS %s.user (\"ID\" int, name text)", keyspace));
-        session1.execute(String.format("CREATE FUNCTION %s.\"ID\"(user user) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java AS 'return user.getInt(\"ID\");'", keyspace));
-        refreshSchema();
-
+        session1.execute(String.format("CREATE FUNCTION %s.\"ID\"(i int) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java AS 'return i;'", keyspace));
+        for (SchemaChangeListener listener : listeners) {
+            ArgumentCaptor<FunctionMetadata> added = ArgumentCaptor.forClass(FunctionMetadata.class);
+            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onFunctionAdded(added.capture());
+            assertThat(added.getValue())
+                    .isInKeyspace(handleId(keyspace))
+                    .hasSignature("\"ID\"(int)");
+        }
         for (Metadata m : metadatas())
-            assertThat(m.getKeyspace(keyspace).getFunction("\"ID\"", m.getKeyspace(keyspace).getUserType("user")).getBody())
-                    .isEqualTo("return user.getInt(\"ID\");");
-
-        session1.execute(String.format("CREATE OR REPLACE FUNCTION %s.\"ID\"(user user) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java "
-                + "AS 'return 1 + user.getInt(\"ID\");'", keyspace));
-
+            assertThat(m.getKeyspace(keyspace).getFunction("\"ID\"", DataType.cint()))
+                    .isNotNull();
+        session1.execute(String.format("CREATE OR REPLACE FUNCTION %s.\"ID\"(i int) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java AS 'return i + 1;'", keyspace));
         for (SchemaChangeListener listener : listeners) {
             ArgumentCaptor<FunctionMetadata> current = ArgumentCaptor.forClass(FunctionMetadata.class);
             ArgumentCaptor<FunctionMetadata> previous = ArgumentCaptor.forClass(FunctionMetadata.class);
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onFunctionChanged(current.capture(), previous.capture());
-            assertThat(previous.getValue()).hasBody("return user.getInt(\"ID\");");
-            assertThat(current.getValue()).hasBody("return 1 + user.getInt(\"ID\");");
+            assertThat(previous.getValue()).hasBody("return i;");
+            assertThat(current.getValue()).hasBody("return i + 1;");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
-            assertThat(m.getKeyspace(keyspace).getFunction("\"ID\"", m.getKeyspace(keyspace).getUserType("user")).getBody())
-                    .isEqualTo("return 1 + user.getInt(\"ID\");");
+            assertThat(m.getKeyspace(keyspace).getFunction("\"ID\"", DataType.cint()).getBody())
+                    .isEqualTo("return i + 1;");
     }
 
     @Test(groups = "short", dataProvider = "existingKeyspaceName")
     @CassandraVersion(major = 2.2)
     public void should_notify_of_function_drop(String keyspace) {
-        session1.execute(String.format("CREATE TYPE IF NOT EXISTS %s.user (\"ID\" int, name text)", keyspace));
-        session1.execute(String.format("CREATE FUNCTION %s.\"ID\"(user user) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java AS 'return user.getInt(\"ID\");'", keyspace));
+        session1.execute(String.format("CREATE FUNCTION %s.\"ID\"(i int) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java AS 'return i;'", keyspace));
         session1.execute(String.format("DROP FUNCTION %s.\"ID\"", keyspace));
-
         for (SchemaChangeListener listener : listeners) {
             ArgumentCaptor<FunctionMetadata> removed = ArgumentCaptor.forClass(FunctionMetadata.class);
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onFunctionRemoved(removed.capture());
             assertThat(removed.getValue())
                     .isInKeyspace(handleId(keyspace))
-                    .hasSignature("\"ID\"(user)");
+                    .hasSignature("\"ID\"(int)");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
-            assertThat(m.getKeyspace(keyspace).getFunction("\"ID\"", m.getKeyspace(keyspace).getUserType("user")))
+            assertThat(m.getKeyspace(keyspace).getFunction("\"ID\"", DataType.cint()))
                     .isNull();
     }
 
@@ -330,7 +321,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
         session1.execute(String.format("CREATE FUNCTION %s.\"PLUS\"(s int, v int) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java"
                 + " AS 'return s+v;'", keyspace));
         session1.execute(String.format("CREATE AGGREGATE %s.\"SUM\"(int) SFUNC \"PLUS\" STYPE int INITCOND 0;", keyspace));
-
         for (SchemaChangeListener listener : listeners) {
             ArgumentCaptor<AggregateMetadata> added = ArgumentCaptor.forClass(AggregateMetadata.class);
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onAggregateAdded(added.capture());
@@ -338,7 +328,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .isInKeyspace(handleId(keyspace))
                     .hasSignature("\"SUM\"(int)");
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getAggregate("\"SUM\"", DataType.cint()))
                     .isNotNull();
@@ -350,13 +339,17 @@ public class SchemaChangesTest extends CCMTestsSupport {
         session1.execute(String.format("CREATE FUNCTION %s.\"PLUS\"(s int, v int) RETURNS NULL ON NULL INPUT RETURNS int LANGUAGE java"
                 + " AS 'return s+v;'", keyspace));
         session1.execute(String.format("CREATE AGGREGATE %s.\"SUM\"(int) SFUNC \"PLUS\" STYPE int INITCOND 0", keyspace));
-        refreshSchema();
+        for (SchemaChangeListener listener : listeners) {
+            ArgumentCaptor<AggregateMetadata> added = ArgumentCaptor.forClass(AggregateMetadata.class);
+            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onAggregateAdded(added.capture());
+            assertThat(added.getValue())
+                    .isInKeyspace(handleId(keyspace))
+                    .hasSignature("\"SUM\"(int)");
+        }
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getAggregate("\"SUM\"", DataType.cint()).getInitCond())
                     .isEqualTo(0);
-
         session1.execute(String.format("CREATE OR REPLACE AGGREGATE %s.\"SUM\"(int) SFUNC \"PLUS\" STYPE int INITCOND 1", keyspace));
-
         for (SchemaChangeListener listener : listeners) {
             ArgumentCaptor<AggregateMetadata> current = ArgumentCaptor.forClass(AggregateMetadata.class);
             ArgumentCaptor<AggregateMetadata> previous = ArgumentCaptor.forClass(AggregateMetadata.class);
@@ -364,7 +357,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             assertThat(previous.getValue()).hasInitCond(0);
             assertThat(current.getValue()).hasInitCond(1);
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getAggregate("\"SUM\"", DataType.cint()).getInitCond())
                     .isEqualTo(1);
@@ -377,7 +369,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                 + " AS 'return s+v;'", keyspace));
         session1.execute(String.format("CREATE AGGREGATE %s.\"SUM\"(int) SFUNC \"PLUS\" STYPE int INITCOND 0", keyspace));
         session1.execute(String.format("DROP AGGREGATE %s.\"SUM\"", keyspace));
-
         for (SchemaChangeListener listener : listeners) {
             ArgumentCaptor<AggregateMetadata> removed = ArgumentCaptor.forClass(AggregateMetadata.class);
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onAggregateRemoved(removed.capture());
@@ -385,8 +376,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .isInKeyspace(handleId(keyspace))
                     .hasSignature("\"SUM\"(int)");
         }
-
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getAggregate("\"SUM\"", DataType.cint()))
                     .isNull();
@@ -397,7 +386,12 @@ public class SchemaChangesTest extends CCMTestsSupport {
     public void should_notify_of_view_creation(String keyspace) {
         session1.execute(String.format("CREATE TABLE %s.table1 (pk int PRIMARY KEY, c int)", keyspace));
         session1.execute(String.format("CREATE MATERIALIZED VIEW %s.mv1 AS SELECT c FROM %s.table1 WHERE c IS NOT NULL PRIMARY KEY (pk, c)", keyspace, keyspace));
-        refreshSchema();
+        for (SchemaChangeListener listener : listeners) {
+            ArgumentCaptor<MaterializedViewMetadata> removed = ArgumentCaptor.forClass(MaterializedViewMetadata.class);
+            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onMaterializedViewAdded(removed.capture());
+            assertThat(removed.getValue())
+                    .hasName("mv1");
+        }
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getMaterializedView("mv1")).isNotNull();
     }
@@ -407,12 +401,26 @@ public class SchemaChangesTest extends CCMTestsSupport {
     public void should_notify_of_view_update(String keyspace) {
         session1.execute(String.format("CREATE TABLE %s.table1 (pk int PRIMARY KEY, c int)", keyspace));
         session1.execute(String.format("CREATE MATERIALIZED VIEW %s.mv1 AS SELECT c FROM %s.table1 WHERE c IS NOT NULL PRIMARY KEY (pk, c) WITH compaction = { 'class' : 'SizeTieredCompactionStrategy' }", keyspace, keyspace));
-        refreshSchema();
+        for (SchemaChangeListener listener : listeners) {
+            ArgumentCaptor<MaterializedViewMetadata> removed = ArgumentCaptor.forClass(MaterializedViewMetadata.class);
+            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onMaterializedViewAdded(removed.capture());
+            assertThat(removed.getValue())
+                    .hasName("mv1");
+            assertThat(removed.getValue().getOptions().getCompaction().get("class"))
+                    .contains("SizeTieredCompactionStrategy");
+        }
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getMaterializedView("mv1").getOptions().getCompaction().get("class")).contains("SizeTieredCompactionStrategy");
-
         session1.execute(String.format("ALTER MATERIALIZED VIEW %s.mv1 WITH compaction = { 'class' : 'LeveledCompactionStrategy' }", keyspace));
-        refreshSchema();
+        for (SchemaChangeListener listener : listeners) {
+            ArgumentCaptor<MaterializedViewMetadata> current = ArgumentCaptor.forClass(MaterializedViewMetadata.class);
+            ArgumentCaptor<MaterializedViewMetadata> previous = ArgumentCaptor.forClass(MaterializedViewMetadata.class);
+            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onMaterializedViewChanged(current.capture(), previous.capture());
+            assertThat(previous.getValue().getOptions().getCompaction().get("class"))
+                    .contains("SizeTieredCompactionStrategy");
+            assertThat(current.getValue().getOptions().getCompaction().get("class"))
+                    .contains("LeveledCompactionStrategy");
+        }
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getMaterializedView("mv1").getOptions().getCompaction().get("class")).contains("LeveledCompactionStrategy");
     }
@@ -423,7 +431,12 @@ public class SchemaChangesTest extends CCMTestsSupport {
         session1.execute(String.format("CREATE TABLE %s.table1 (pk int PRIMARY KEY, c int)", keyspace));
         session1.execute(String.format("CREATE MATERIALIZED VIEW %s.mv1 AS SELECT c FROM %s.table1 WHERE c IS NOT NULL PRIMARY KEY (pk, c)", keyspace, keyspace));
         session1.execute(String.format("DROP MATERIALIZED VIEW %s.mv1", keyspace));
-        refreshSchema();
+        for (SchemaChangeListener listener : listeners) {
+            ArgumentCaptor<MaterializedViewMetadata> removed = ArgumentCaptor.forClass(MaterializedViewMetadata.class);
+            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onMaterializedViewRemoved(removed.capture());
+            assertThat(removed.getValue())
+                    .hasName("mv1");
+        }
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).getMaterializedView("mv1")).isNull();
     }
@@ -436,7 +449,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onKeyspaceAdded(added.capture());
             assertThat(added.getValue()).hasName(handleId(keyspace));
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace)).isNotNull();
     }
@@ -451,7 +463,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             assertThat(added.getValue()).hasName(handleId(keyspace));
         }
         assert added != null;
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace).isDurableWrites()).isTrue();
         execute(ALTER_KEYSPACE, keyspace);
@@ -466,7 +477,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
                     .hasName(handleId(keyspace))
                     .isNotDurableWrites();
         }
-        refreshSchema();
         for (Metadata m : metadatas())
             assertThat(m.getKeyspace(keyspace)).isNotDurableWrites();
     }
@@ -480,10 +490,9 @@ public class SchemaChangesTest extends CCMTestsSupport {
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onKeyspaceAdded(added.capture());
             assertThat(added.getValue()).hasName(handleId(keyspace));
         }
-        assert added != null;
-        refreshSchema();
         for (Metadata m : metadatas())
-            assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isNotEmpty();
+            // token metadata is refreshed asynchronously on the second client, we need to wait until it's done
+            check().before(NOTIF_TIMEOUT_MS).that(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE")).size(), equalTo(1)).becomesTrue();
         execute(CREATE_TABLE, keyspace); // to test table drop notifications
         execute(DROP_KEYSPACE, keyspace);
         for (SchemaChangeListener listener : listeners) {
@@ -497,10 +506,10 @@ public class SchemaChangesTest extends CCMTestsSupport {
             assertThat(ks.getValue())
                     .hasName(handleId(keyspace));
         }
-        refreshSchema();
         for (Metadata m : metadatas()) {
             assertThat(m.getKeyspace(keyspace)).isNull();
-            assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isEmpty();
+            // token metadata is refreshed asynchronously on the second client, we need to wait until it's done
+            check().before(NOTIF_TIMEOUT_MS).that(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE")).size(), equalTo(0)).becomesTrue();
         }
     }
 
@@ -642,14 +651,5 @@ public class SchemaChangesTest extends CCMTestsSupport {
     private List<Metadata> metadatas() {
         return Lists.newArrayList(cluster1.getMetadata(), cluster2.getMetadata());
     }
-
-    @SuppressWarnings("unchecked")
-    private void refreshSchema() {
-        Futures.getUnchecked(
-                Futures.successfulAsList(
-                        cluster1.manager.submitSchemaRefresh(null, null, null, null),
-                        cluster2.manager.submitSchemaRefresh(null, null, null, null)));
-    }
-
 
 }
