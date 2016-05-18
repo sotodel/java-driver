@@ -2,6 +2,8 @@
 
 ### 3.0.3 (in progress)
 
+- [bug] JAVA-1186: Fix duplicated hosts in DCAwarePolicy warn message.
+
 
 ### 3.0.2
 
