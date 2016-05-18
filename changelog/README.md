@@ -2,6 +2,8 @@
 
 ### 3.0.3 (in progress)
 
+- [bug] JAVA-1187: Fix warning message when local CL used with RoundRobinPolicy.
+
 
 ### 3.0.2
 
