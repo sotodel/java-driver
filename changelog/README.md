@@ -2,6 +2,8 @@
 
 ### 3.0.3 (in progress)
 
+- [improvement] JAVA-1175: Warn if DCAwarePolicy configuration is inconsistent.
+
 
 ### 3.0.2
 
