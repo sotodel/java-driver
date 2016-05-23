@@ -2,6 +2,8 @@
 
 ### 3.0.3 (in progress)
 
+- [improvement] JAVA-1126: Mapper should be resilient when table or UDT is modified.
+
 
 ### 3.0.2
 
