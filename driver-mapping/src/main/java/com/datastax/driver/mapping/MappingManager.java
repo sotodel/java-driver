@@ -22,10 +22,7 @@ import com.datastax.driver.mapping.annotations.UDT;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Mapping manager from which to obtain entity mappers.
@@ -126,19 +123,23 @@ public class MappingManager {
             @Override
             public void onUserTypeChanged(UserType current, UserType previous) {
                 synchronized (udtCodecs) {
+                    Set<Class<?>> udtClasses = new HashSet<Class<?>>();
                     Iterator<MappedUDTCodec<?>> it = udtCodecs.values().iterator();
                     while (it.hasNext()) {
                         MappedUDTCodec<?> codec = it.next();
                         if (previous.equals(codec.getCqlType())) {
                             LOGGER.warn("User type {} has been altered; existing mappers for @UDT annotated {} might not work properly anymore",
                                     previous, codec.getUdtClass());
+                            udtClasses.add(codec.getUdtClass());
                             it.remove();
-                            // try to register an updated version of the previous codec
-                            try {
-                                getUDTCodec(codec.getUdtClass());
-                            } catch (Exception e) {
-                                LOGGER.error("Could not update mapping for @UDT annotated " + codec.getUdtClass(), e);
-                            }
+                        }
+                    }
+                    for (Class<?> udtClass : udtClasses) {
+                        // try to register an updated version of the previous codec
+                        try {
+                            getUDTCodec(udtClass);
+                        } catch (Exception e) {
+                            LOGGER.error("Could not update mapping for @UDT annotated " + udtClass, e);
                         }
                     }
                 }
