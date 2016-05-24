@@ -96,7 +96,7 @@ public class MappingManager {
                     Iterator<Mapper<?>> it = mappers.values().iterator();
                     while (it.hasNext()) {
                         Mapper<?> mapper = it.next();
-                        if (previous.equals(mapper.getTableMetadata())) {
+                        if (mapper.getTableMetadata().equals(previous)) {
                             LOGGER.warn("Table {} has been altered; existing mappers for @Entity annotated {} might not work properly anymore",
                                     previous.getName(), mapper.getMappedClass());
                             it.remove();
@@ -111,7 +111,7 @@ public class MappingManager {
                     Iterator<MappedUDTCodec<?>> it = udtCodecs.values().iterator();
                     while (it.hasNext()) {
                         MappedUDTCodec<?> codec = it.next();
-                        if (codec.accepts(type)) {
+                        if (type.equals(codec.getCqlType())) {
                             LOGGER.error("User type {} has been removed; existing mappers for @UDT annotated {} will not work anymore",
                                     type, codec.getUdtClass());
                             it.remove();
