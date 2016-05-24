@@ -1,5 +1,10 @@
 ## Changelog
 
+### 3.1.0 (in progress)
+
+- [new feature] JAVA-1153: Add PER PARTITION LIMIT to Select QueryBuilder.
+
+
 ### 3.0.0
 
 - [bug] JAVA-1034: fix metadata parser for collections of custom types.
