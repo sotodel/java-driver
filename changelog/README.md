@@ -1,5 +1,10 @@
 ## Changelog
 
+### 3.1.0 (in progress)
+
+- [improvement] JAVA-1147: Upgrade Netty to 4.0.36.
+
+
 ### 3.0.0
 
 - [bug] JAVA-1034: fix metadata parser for collections of custom types.
