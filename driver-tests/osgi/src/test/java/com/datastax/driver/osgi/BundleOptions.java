@@ -15,6 +15,7 @@
  */
 package com.datastax.driver.osgi;
 
+import com.datastax.driver.core.ProtocolOptions;
 import com.datastax.driver.core.TestUtils;
 import org.ops4j.pax.exam.Option;
 import org.ops4j.pax.exam.options.CompositeOption;
@@ -46,6 +47,19 @@ public class BundleOptions {
 
     public static MavenArtifactProvisionOption guavaBundle() {
         return mavenBundle("com.google.guava", "guava", "16.0.1");
+    }
+
+    public static CompositeOption lz4Bundle() {
+        return new CompositeOption() {
+
+            @Override
+            public Option[] getOptions() {
+                return options(
+                        systemProperty("cassandra.compression").value(ProtocolOptions.Compression.LZ4.name()),
+                        mavenBundle("net.jpountz.lz4", "lz4", "1.3.0")
+                );
+            }
+        };
     }
 
     public static CompositeOption nettyBundles() {
