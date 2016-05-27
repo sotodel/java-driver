@@ -2,6 +2,8 @@
 
 ### 3.0.3 (in progress)
 
+- [improvement] JAVA-1198: Document that BoundStatement is not thread-safe.
+
 
 ### 3.0.2
 
