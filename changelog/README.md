@@ -2,6 +2,8 @@
 
 ### 3.0.3 (in progress)
 
+- [bug] JAVA-1202: Handle null rpc_address when checking schema agreement.
+
 
 ### 3.0.2
 
