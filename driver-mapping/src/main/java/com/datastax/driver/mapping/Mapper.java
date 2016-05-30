@@ -46,11 +46,9 @@ public class Mapper<T> {
 
     private static final Logger logger = LoggerFactory.getLogger(EntityMapper.class);
 
-    final MappingManager manager;
-    final ProtocolVersion protocolVersion;
-    final Class<T> klass;
-    final EntityMapper<T> mapper;
-    final TableMetadata tableMetadata;
+    private final MappingManager manager;
+    private final EntityMapper<T> mapper;
+    private final TableMetadata tableMetadata;
 
     // Cache prepared statements for each type of query we use.
     private volatile Map<MapperQueryKey, PreparedStatement> preparedQueries = Collections.emptyMap();
@@ -63,19 +61,17 @@ public class Mapper<T> {
 
     private static final EnumMap<Option.Type, Option> NO_OPTIONS = new EnumMap<Option.Type, Option>(Option.Type.class);
 
-    final Function<ResultSet, T> mapOneFunction;
+    private final Function<ResultSet, T> mapOneFunction;
     final Function<ResultSet, T> mapOneFunctionWithoutAliases;
     final Function<ResultSet, Result<T>> mapAllFunctionWithoutAliases;
 
     Mapper(MappingManager manager, Class<T> klass, EntityMapper<T> mapper) {
         this.manager = manager;
-        this.klass = klass;
         this.mapper = mapper;
 
         KeyspaceMetadata keyspace = session().getCluster().getMetadata().getKeyspace(mapper.getKeyspace());
         this.tableMetadata = keyspace == null ? null : keyspace.getTable(mapper.getTable());
 
-        this.protocolVersion = manager.getSession().getCluster().getConfiguration().getProtocolOptions().getProtocolVersion();
         this.mapOneFunction = new Function<ResultSet, T>() {
             @Override
             public T apply(ResultSet rs) {
@@ -104,7 +100,7 @@ public class Mapper<T> {
         return manager.getSession();
     }
 
-    PreparedStatement getPreparedQuery(QueryType type, Set<ColumnMapper<?>> columns, EnumMap<Option.Type, Option> options) {
+    private PreparedStatement getPreparedQuery(QueryType type, Set<PropertyMapper> columns, EnumMap<Option.Type, Option> options) {
 
         MapperQueryKey pqk = new MapperQueryKey(type, columns, options);
 
@@ -125,8 +121,8 @@ public class Mapper<T> {
         return stmt;
     }
 
-    PreparedStatement getPreparedQuery(QueryType type, EnumMap<Option.Type, Option> options) {
-        return getPreparedQuery(type, Collections.<ColumnMapper<?>>emptySet(), options);
+    private PreparedStatement getPreparedQuery(QueryType type, EnumMap<Option.Type, Option> options) {
+        return getPreparedQuery(type, Collections.<PropertyMapper>emptySet(), options);
     }
 
     /**
@@ -188,20 +184,20 @@ public class Mapper<T> {
     }
 
     private Statement saveQuery(T entity, EnumMap<Option.Type, Option> options) {
-        Map<ColumnMapper<?>, Object> values = new HashMap<ColumnMapper<?>, Object>();
+        Map<PropertyMapper, Object> values = new HashMap<PropertyMapper, Object>();
         boolean saveNullFields = shouldSaveNullFields(options);
 
-        for (ColumnMapper<T> cm : mapper.allColumns()) {
-            Object value = cm.getValue(entity);
-            if (!cm.property.isComputed() && (saveNullFields || value != null)) {
-                values.put(cm, value);
+        for (PropertyMapper col : mapper.allColumns) {
+            Object value = col.getValue(entity);
+            if (!col.isComputed() && (saveNullFields || value != null)) {
+                values.put(col, value);
             }
         }
 
         BoundStatement bs = getPreparedQuery(QueryType.SAVE, values.keySet(), options).bind();
         int i = 0;
-        for (Map.Entry<ColumnMapper<?>, Object> entry : values.entrySet()) {
-            ColumnMapper<?> mapper = entry.getKey();
+        for (Map.Entry<PropertyMapper, Object> entry : values.entrySet()) {
+            PropertyMapper mapper = entry.getKey();
             Object value = entry.getValue();
             setObject(bs, i++, value, mapper);
         }
@@ -222,12 +218,12 @@ public class Mapper<T> {
         return option == null || option.saveNullFields;
     }
 
-    private static void setObject(BoundStatement bs, int i, Object value, ColumnMapper<?> mapper) {
-        TypeCodec<Object> customCodec = mapper.getCustomCodec();
+    private static void setObject(BoundStatement bs, int i, Object value, PropertyMapper mapper) {
+        TypeCodec<Object> customCodec = mapper.customCodec;
         if (customCodec != null)
             bs.set(i, value, customCodec);
         else
-            bs.set(i, value, mapper.getJavaType());
+            bs.set(i, value, mapper.javaType);
     }
 
     /**
@@ -333,9 +329,9 @@ public class Mapper<T> {
         BoundStatement bs = getPreparedQuery(QueryType.GET, options).bind();
         int i = 0;
         for (Object value : primaryKeys) {
-            ColumnMapper<T> column = mapper.getPrimaryKeyColumn(i);
+            PropertyMapper column = mapper.getPrimaryKeyColumn(i);
             if (value == null) {
-                throw new IllegalArgumentException(String.format("Invalid null value for PRIMARY KEY column %s (argument %d)", column.getColumnName(), i));
+                throw new IllegalArgumentException(String.format("Invalid null value for PRIMARY KEY column %s (argument %d)", column.columnName, i));
             }
             setObject(bs, i++, value, column);
         }
@@ -515,9 +511,9 @@ public class Mapper<T> {
 
         int columnNumber = 0;
         for (Object value : primaryKey) {
-            ColumnMapper<T> column = mapper.getPrimaryKeyColumn(columnNumber);
+            PropertyMapper column = mapper.getPrimaryKeyColumn(columnNumber);
             if (value == null) {
-                throw new IllegalArgumentException(String.format("Invalid null value for PRIMARY KEY column %s (argument %d)", column.getColumnName(), i));
+                throw new IllegalArgumentException(String.format("Invalid null value for PRIMARY KEY column %s (argument %d)", column.columnName, i));
             }
             setObject(bs, i++, value, column);
             columnNumber++;
@@ -623,7 +619,7 @@ public class Mapper<T> {
      * @see #mapAliased(ResultSet)
      */
     public Result<T> map(ResultSet resultSet) {
-        return new Result<T>(resultSet, mapper, protocolVersion);
+        return new Result<T>(resultSet, mapper);
     }
 
     /**
@@ -642,7 +638,7 @@ public class Mapper<T> {
     public Result<T> mapAliased(ResultSet resultSet) {
         return (manager.isCassandraV1)
                 ? map(resultSet) // no aliases
-                : new Result<T>(resultSet, mapper, protocolVersion, true);
+                : new Result<T>(resultSet, mapper, true);
     }
 
     /**
@@ -1009,14 +1005,14 @@ public class Mapper<T> {
     private static class MapperQueryKey {
         private final QueryType queryType;
         private final EnumSet<Option.Type> optionTypes;
-        private final Set<ColumnMapper<?>> columns;
+        private final Set<PropertyMapper> columns;
 
-        MapperQueryKey(QueryType queryType, Set<ColumnMapper<?>> columnMappers, EnumMap<Option.Type, Option> options) {
+        MapperQueryKey(QueryType queryType, Set<PropertyMapper> propertyMappers, EnumMap<Option.Type, Option> options) {
             Preconditions.checkNotNull(queryType);
             Preconditions.checkNotNull(options);
-            Preconditions.checkNotNull(columnMappers);
+            Preconditions.checkNotNull(propertyMappers);
             this.queryType = queryType;
-            this.columns = columnMappers;
+            this.columns = propertyMappers;
             this.optionTypes = EnumSet.noneOf(Option.Type.class);
             for (Option opt : options.values()) {
                 if (opt.isIncludedInQuery())

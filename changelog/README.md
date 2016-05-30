@@ -3,6 +3,7 @@
 ### 3.1.0 (in progress)
 
 - [new feature] JAVA-541: Add polymorphism support to object mapper.
+- [new feature] JAVA-636: Allow @Column annotations on getters/setters as well as fields.
 
 
 ### 3.0.0
