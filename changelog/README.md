@@ -2,6 +2,7 @@
 
 ### 3.0.3 (in progress)
 
+- [improvement] JAVA-1204: Update documentation to indicate tcnative version requirement.
 
 ### 3.0.2
 
