@@ -153,6 +153,7 @@ public class Select extends BuiltStatement {
             throw new IllegalStateException("A LIMIT value has already been provided");
 
         this.limit = limit;
+        setDirty();
         return this;
     }
 
@@ -196,6 +197,7 @@ public class Select extends BuiltStatement {
             throw new IllegalStateException("PER PARTITION LIMIT is not allowed with SELECT DISTINCT queries");
 
         this.perPartitionLimit = perPartitionLimit;
+        setDirty();
         return this;
     }
 

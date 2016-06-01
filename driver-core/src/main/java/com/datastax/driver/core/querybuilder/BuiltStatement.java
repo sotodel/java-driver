@@ -216,6 +216,10 @@ public abstract class BuiltStatement extends RegularStatement {
         hasNonIdempotentOps = true;
     }
 
+    void setDirty() {
+        dirty = true;
+    }
+
     void checkForBindMarkers(Object value) {
         dirty = true;
         if (Utils.containsBindMarker(value))

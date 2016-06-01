@@ -948,7 +948,7 @@ public class QueryBuilderTest {
                 select().all().from("foo").perPartitionLimit(2).limit(bindMarker()).toString())
                 .isEqualTo("SELECT * FROM foo PER PARTITION LIMIT 2 LIMIT ?;");
         assertThat(
-                select().all().from("foo").where(in("a", 2, 4)).limit(3).perPartitionLimit(2).toString())
+                select().all().from("foo").where(in("a", 2, 4)).perPartitionLimit(2).limit(3).toString())
                 .isEqualTo("SELECT * FROM foo WHERE a IN (2,4) PER PARTITION LIMIT 2 LIMIT 3;");
         assertThat(
                 select().all().from("foo").where(eq("a", bindMarker())).perPartitionLimit(bindMarker()).limit(3).toString())
