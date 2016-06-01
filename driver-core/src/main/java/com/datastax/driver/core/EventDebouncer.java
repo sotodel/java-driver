@@ -155,9 +155,10 @@ abstract class EventDebouncer<T> {
 
         if (state == State.RUNNING) {
             int count = eventCount.get();
-            if (count < maxPendingEvents()) {
+            int maxPendingEvents = maxPendingEvents();
+            if (count < maxPendingEvents) {
                 scheduleDelayedDelivery();
-            } else if (count == maxPendingEvents()) {
+            } else if (count == maxPendingEvents) {
                 scheduleImmediateDelivery();
             }
         } else if (state == State.STOPPED) {
