@@ -1851,9 +1851,10 @@ public class Cluster implements Closeable {
                     if (controlConnection.refreshNodeInfo(host)) {
                         logger.debug("Successful reconnection to {}, setting host UP", host);
                         try {
-                            if (isHostAddition)
+                            if (isHostAddition) {
                                 onAdd(host, connection);
-                            else
+                                submitNodeListRefresh();
+                            } else
                                 onUp(host, connection);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
@@ -2729,6 +2730,7 @@ public class Cluster implements Closeable {
                     public void runMayThrow() throws Exception {
                         if (controlConnection.refreshNodeInfo(host)) {
                             onAdd(host, null);
+                            submitNodeListRefresh();
                         } else {
                             logger.debug("Not enough info for {}, ignoring host", host);
                         }
@@ -2765,6 +2767,7 @@ public class Cluster implements Closeable {
                         if (metadata.remove(host)) {
                             logger.info("Cassandra host {} removed", host);
                             onRemove(host);
+                            submitNodeListRefresh();
                         }
                     }
                 };
