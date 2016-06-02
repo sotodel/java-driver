@@ -93,7 +93,7 @@ public class SchemaChangesTest extends CCMTestsSupport {
         cluster2.init();
 
         cluster1.register(listener1 = mock(SchemaChangeListener.class));
-        cluster1.register(listener2 = mock(SchemaChangeListener.class));
+        cluster2.register(listener2 = mock(SchemaChangeListener.class));
         listeners = Lists.newArrayList(listener1, listener2);
 
         schemaDisabledCluster.register(schemaDisabledListener = mock(SchemaChangeListener.class));
@@ -484,9 +484,8 @@ public class SchemaChangesTest extends CCMTestsSupport {
     @Test(groups = "short", dataProvider = "newKeyspaceName")
     public void should_notify_of_keyspace_drop(String keyspace) throws InterruptedException {
         execute(CREATE_KEYSPACE, keyspace);
-        ArgumentCaptor<KeyspaceMetadata> added = null;
         for (SchemaChangeListener listener : listeners) {
-            added = ArgumentCaptor.forClass(KeyspaceMetadata.class);
+            ArgumentCaptor<KeyspaceMetadata> added = ArgumentCaptor.forClass(KeyspaceMetadata.class);
             verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onKeyspaceAdded(added.capture());
             assertThat(added.getValue()).hasName(handleId(keyspace));
         }
