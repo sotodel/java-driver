@@ -2255,8 +2255,6 @@ public class Cluster implements Closeable {
         private void maybeRefreshSchemaAndSignal(final Connection connection, final DefaultResultSetFuture future, final ResultSet rs, final SchemaElement targetType, final String targetKeyspace, final String targetName, final List<String> targetSignature) {
             // if false, only wait for schema agreement
             final boolean refreshSchema = (targetKeyspace != null);
-            // JAVA-1193: If we have an updated keyspace, rebuild the node list and token map too
-            final boolean refreshNodeList = targetType == KEYSPACE;
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
@@ -2273,17 +2271,6 @@ public class Cluster implements Closeable {
                             schemaReady = submitSchemaRefresh(targetType, targetKeyspace, targetName, targetSignature);
                             // JAVA-1120: skip debouncing delay and force immediate delivery
                             schemaRefreshRequestDebouncer.scheduleImmediateDelivery();
-                            if (refreshNodeList) {
-                                schemaReady = Futures.transform(schemaReady, new AsyncFunction<Object, Void>() {
-                                    @Override
-                                    public ListenableFuture<Void> apply(Object input) throws Exception {
-                                        ListenableFuture<Void> nodeListRefreshReady = submitNodeListRefresh();
-                                        // JAVA-1120: skip debouncing delay and force immediate delivery
-                                        nodeListRefreshRequestDebouncer.scheduleImmediateDelivery();
-                                        return nodeListRefreshReady;
-                                    }
-                                });
-                            }
                         } else {
                             schemaReady = MoreFutures.VOID_SUCCESS;
                         }

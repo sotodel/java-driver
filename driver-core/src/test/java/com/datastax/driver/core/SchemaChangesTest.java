@@ -596,7 +596,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             schemaDisabledCluster.getConfiguration().getQueryOptions().setMetadataEnabled(true);
 
             verify(schemaDisabledControlConnection, after(1000)).refreshSchema(null, null, null, null);
-            verify(schemaDisabledControlConnection).refreshNodeListAndTokenMap();
 
             // Ensure that there is schema metadata.
             assertThat(schemaDisabledCluster.getMetadata().getKeyspace(keyspace)).isNotNull();
@@ -612,7 +611,6 @@ public class SchemaChangesTest extends CCMTestsSupport {
             reset(schemaDisabledControlConnection);
             schemaDisabledCluster.getConfiguration().getQueryOptions().setMetadataEnabled(true);
             verify(schemaDisabledControlConnection, after(1000).never()).refreshSchema(null, null, null, null);
-            verify(schemaDisabledControlConnection, never()).refreshNodeListAndTokenMap();
         } finally {
             // Reset listener mock to not count it's interactions in this test.
             reset(schemaDisabledListener);

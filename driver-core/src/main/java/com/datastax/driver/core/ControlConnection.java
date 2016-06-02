@@ -309,7 +309,8 @@ class ControlConnection implements Connection.Owner {
             // If we rebuild all from scratch or have an updated keyspace, rebuild the token map
             // since some replication on some keyspace may have changed
             if ((targetType == null || targetType == KEYSPACE)) {
-                cluster.submitNodeListRefresh();
+                // JAVA-1193: If we have an updated keyspace, rebuild the token map synchronously
+                cluster.metadata.rebuildTokenMap();
             }
         } catch (ConnectionException e) {
             logger.debug("[Control connection] Connection error while refreshing schema ({})", e.getMessage());
